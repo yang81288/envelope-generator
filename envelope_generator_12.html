@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台灣直式信封產生器</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'PingFang TC','Microsoft JhengHei','Microsoft YaHei','Noto Sans CJK TC','Noto Sans TC','黑體','SimHei',sans-serif; background: #f5f4f0; min-height: 100vh; padding: 2rem 1rem; color: #222; }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #333; letter-spacing: 1px; }
+  .container { max-width: 760px; margin: 0 auto; }
+  .form-card { background: white; border-radius: 12px; border: 1px solid #ddd; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 12px; color: #666; }
+  .form-group input { font-size: 13px; padding: 7px 10px; border-radius: 8px; border: 1px solid #ccc; background: #fafafa; color: #222; width: 100%; font-family: inherit; }
+  .form-group input:focus { outline: none; border-color: #888; background: white; }
+  .section-title { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #eee; grid-column: 1/-1; }
+  .full { grid-column: 1/-1; }
+  .btn-row { display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap; align-items: center; }
+  .btn { padding: 9px 18px; border-radius: 8px; border: 1px solid #ccc; background: white; color: #333; cursor: pointer; font-size: 13px; font-family: inherit; }
+  .btn:hover { background: #f0f0f0; }
+  .btn-primary { background: #222; color: white; border-color: transparent; }
+  .btn-primary:hover { background: #444; }
+  .btn-green { background: #2a7a2a; color: white; border-color: transparent; }
+  .btn-green:hover { background: #1e5c1e; }
+  .size-toggle { display: flex; border-radius: 8px; overflow: hidden; border: 1px solid #ccc; }
+  .size-btn { padding: 9px 18px; border: none; background: white; color: #555; cursor: pointer; font-size: 13px; font-family: inherit; border-right: 1px solid #ccc; }
+  .size-btn:last-child { border-right: none; }
+  .size-btn.active { background: #222; color: white; }
+  .size-btn:hover:not(.active) { background: #f0f0f0; }
+
+  /* 頁面切換 */
+  .page { display: none; }
+  .page.active { display: block; }
+  .nav-tabs { display: flex; border-radius: 10px; overflow: hidden; border: 1px solid #ddd; margin-bottom: 1.5rem; }
+  .nav-tab { flex: 1; padding: 11px; border: none; background: white; color: #555; cursor: pointer; font-size: 14px; font-family: inherit; border-right: 1px solid #ddd; font-weight: 500; }
+  .nav-tab:last-child { border-right: none; }
+  .nav-tab.active { background: #222; color: white; }
+  .nav-tab:hover:not(.active) { background: #f5f5f5; }
+
+  /* 信封 */
+  .envelope-container { display: flex; justify-content: center; }
+  .envelope { border: 1.5px solid #444; background: white; position: relative; color: #111; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+  .envelope.size-a4 { width: 320px; height: 453px; }
+  .envelope.size-medium { width: 174px; height: 400px; }
+  .stamp-area { position: absolute; border: 1.5px dashed #999; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.5; color: #999; }
+  .size-a4 .stamp-area { top: 13px; left: 13px; width: 54px; height: 66px; font-size: 9px; }
+  .size-medium .stamp-area { top: 10px; left: 10px; width: 34px; height: 44px; font-size: 7px; }
+  .recv-postcode-area { position: absolute; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  .send-postcode-area { position: absolute; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+  .size-a4 .recv-postcode-area { top: 10px; right: 10px; }
+  .size-a4 .send-postcode-area { bottom: 10px; left: 10px; }
+  .size-medium .recv-postcode-area { top: 8px; right: 8px; }
+  .size-medium .send-postcode-area { bottom: 8px; left: 8px; }
+  .postcode-label { color: #c00; }
+  .size-a4 .postcode-label { font-size: 8px; }
+  .size-medium .postcode-label { font-size: 6px; }
+  .postcode-box { display: flex; gap: 2px; align-items: center; }
+  .digit { border: 1px solid #c00; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #c00; }
+  .size-a4 .digit { width: 16px; height: 20px; font-size: 12px; }
+  .size-medium .digit { width: 10px; height: 13px; font-size: 8px; }
+  .postcode-sep { color: #c00; font-weight: 700; margin: 0 1px; }
+  .size-a4 .postcode-sep { font-size: 12px; }
+  .size-medium .postcode-sep { font-size: 8px; }
+  .env-body { position: absolute; display: flex; flex-direction: row; }
+  .size-a4 .env-body { top: 58px; left: 8px; right: 8px; bottom: 58px; }
+  .size-medium .env-body { top: 42px; left: 5px; right: 5px; bottom: 42px; }
+  .col-sender { display: flex; flex-direction: row; align-items: flex-end; padding-bottom: 4px; }
+  .size-a4 .col-sender { width: 82px; }
+  .size-medium .col-sender { width: 50px; }
+  .sender-lane { display: flex; flex-direction: column; align-items: center; height: 100%; }
+  .sender-spacer { flex: 1; }
+  .col-recv-name { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .col-recv-addr { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .size-a4 .col-recv-addr { width: 40px; }
+  .size-medium .col-recv-addr { width: 26px; }
+  .divider-v { width: 0.5px; background: #ddd; margin: 0 2px; align-self: stretch; }
+  .vt { writing-mode: vertical-rl; text-orientation: mixed; color: #111; }
+  .size-a4 .vt-sm { font-size: 12px; line-height: 1.6; letter-spacing: 1px; }
+  .size-a4 .vt-name { font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+  .size-a4 .vt-lg { font-size: 16px; font-weight: 800; letter-spacing: 2px; }
+  .size-a4 .vt-md { font-size: 13px; font-weight: 600; letter-spacing: 1px; }
+  .size-medium .vt-sm { font-size: 8px; line-height: 1.5; letter-spacing: 0.5px; }
+  .size-medium .vt-name { font-size: 8px; font-weight: 700; }
+  .size-medium .vt-lg { font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+  .size-medium .vt-md { font-size: 9px; font-weight: 600; }
+
+  /* 批次清單 */
+  .batch-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; max-height: 280px; overflow-y: auto; }
+  .batch-item { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .batch-item-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .batch-item-recv { font-weight: 600; color: #1a5276; }
+  .batch-item-send { color: #1e8449; font-size: 11px; }
+  .batch-item-addr { color: #666; font-size: 11px; }
+  .batch-item-btns { display: flex; gap: 4px; flex-shrink: 0; }
+  .batch-delete { background: none; border: none; color: #c00; cursor: pointer; font-size: 15px; padding: 0 4px; }
+
+  /* Excel上傳 */
+  .upload-area { border: 2px dashed #ccc; border-radius: 10px; padding: 1.2rem; text-align: center; cursor: pointer; color: #888; font-size: 13px; transition: border-color 0.2s; margin-bottom: 12px; }
+  .upload-area:hover { border-color: #1a5276; color: #1a5276; }
+  .upload-area input { display: none; }
+
+  /* 批次預覽區 */
+  .preview-box { background: #e8e8e4; border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 1.5rem; }
+  .preview-nav-row { display: flex; align-items: center; gap: 12px; }
+  .preview-nav-row button { padding: 6px 16px; border-radius: 6px; border: 1px solid #bbb; background: white; cursor: pointer; font-size: 13px; font-family: inherit; }
+  .preview-nav-row button:hover:not(:disabled) { background: #f0f0f0; }
+  .preview-nav-row button:disabled { opacity: 0.3; cursor: default; }
+  .preview-nav-info { font-size: 13px; color: #555; min-width: 70px; text-align: center; }
+  .preview-empty { color: #aaa; font-size: 13px; padding: 2rem 0; }
+
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: white; padding: 0; margin: 0; }
+    .no-print { display: none !important; }
+    .container { max-width: 100%; padding: 0; margin: 0; }
+    .envelope.size-a4 { width: 210mm; height: 297mm; box-shadow: none; border: none; background: white !important; overflow: hidden; }
+    .envelope.size-a4 .stamp-area { top: 10mm; left: 10mm; width: 34mm; height: 42mm; font-size: 7mm; }
+    .envelope.size-a4 .digit { width: 10mm; height: 13mm; font-size: 8mm; }
+    .envelope.size-a4 .postcode-label { font-size: 4mm; }
+    .envelope.size-a4 .postcode-sep { font-size: 8mm; }
+    .envelope.size-a4 .recv-postcode-area { top: 6mm; right: 6mm; }
+    .envelope.size-a4 .send-postcode-area { bottom: 6mm; left: 6mm; }
+    .envelope.size-a4 .env-body { top: 38mm; left: 8mm; right: 5mm; bottom: 38mm; }
+    .envelope.size-a4 .col-sender { width: 52mm; padding-left: 8mm; }
+    .envelope.size-a4 .col-recv-addr { width: 25mm; }
+    .envelope.size-a4 .vt-sm { font-size: 8mm; }
+    .envelope.size-a4 .vt-name { font-size: 9mm; }
+    .envelope.size-a4 .vt-lg { font-size: 11mm; }
+    .envelope.size-a4 .vt-md { font-size: 9mm; }
+    .envelope.size-medium { width: 100mm; height: 230mm; box-shadow: none; border: none; background: white !important; overflow: hidden; }
+    .envelope.size-medium .stamp-area { top: 5mm; left: 5mm; width: 16mm; height: 22mm; font-size: 3mm; }
+    .envelope.size-medium .digit { width: 5mm; height: 6.5mm; font-size: 4mm; }
+    .envelope.size-medium .postcode-label { font-size: 2.5mm; }
+    .envelope.size-medium .postcode-sep { font-size: 4mm; }
+    .envelope.size-medium .recv-postcode-area { top: 4mm; right: 4mm; }
+    .envelope.size-medium .send-postcode-area { bottom: 4mm; left: 4mm; }
+    .envelope.size-medium .env-body { top: 22mm; left: 3mm; right: 3mm; bottom: 22mm; }
+    .envelope.size-medium .col-sender { width: 25mm; padding-left: 3mm; }
+    .envelope.size-medium .col-recv-addr { width: 13mm; }
+    .envelope.size-medium .vt-sm { font-size: 3.5mm; }
+    .envelope.size-medium .vt-name { font-size: 3.8mm; }
+    .envelope.size-medium .vt-lg { font-size: 6mm; }
+    .envelope.size-medium .vt-md { font-size: 4mm; }
+    .vt { color: #111 !important; }
+    .divider-v { background: #ccc !important; }
+    .digit { color: #c00 !important; border-color: #c00 !important; }
+    .postcode-label { color: #c00 !important; }
+    .postcode-sep { color: #c00 !important; }
+    /* 單張列印：中式信封置中 */
+    .single-print-wrap { display: flex; align-items: center; justify-content: center; width: 210mm; height: 297mm; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📮 台灣直式信封產生器</h1>
+
+  <div class="nav-tabs no-print">
+    <button class="nav-tab active" onclick="switchPage('single',this)">單張列印</button>
+    <button class="nav-tab" onclick="switchPage('batch',this)">批次列印</button>
+  </div>
+
+  <!-- ===== 單張列印 ===== -->
+  <div id="page-single" class="page active">
+    <div class="form-card no-print">
+      <div class="form-grid">
+        <div class="section-title">收件人資訊</div>
+        <div class="form-group"><label>郵遞區號（5碼）</label><input id="recv-zip" type="text" maxlength="5" value=""></div>
+        <div class="form-group"><label>收件人姓名</label><input id="recv-name" type="text" value=""></div>
+        <div class="form-group full"><label>收件地址</label><input id="recv-addr" type="text" value=""></div>
+        <div class="form-group"><label>稱謂</label><input id="recv-title" type="text" value="" placeholder="例：小姐、先生"></div>
+        <div class="form-group"><label>啟/收/鈞啟</label><input id="recv-suffix" type="text" value=""></div>
+      </div>
+    </div>
+    <div class="form-card no-print">
+      <div class="form-grid">
+        <div class="section-title">寄件人資訊</div>
+        <div class="form-group"><label>郵遞區號（5碼）</label><input id="send-zip" type="text" maxlength="5" value=""></div>
+        <div class="form-group"><label>寄件人姓名</label><input id="send-name" type="text" value=""></div>
+        <div class="form-group full"><label>寄件地址</label><input id="send-addr" type="text" value=""></div>
+      </div>
+    </div>
+    <div class="btn-row no-print">
+      <div class="size-toggle">
+        <button class="size-btn active" onclick="setSize('a4',this)">A4 直式</button>
+        <button class="size-btn" onclick="setSize('medium',this)">中式信封</button>
+      </div>
+      <button class="btn btn-primary" onclick="printSingle()">🖨️ 列印</button>
+    </div>
+    <br>
+    <!-- 單張預覽（列印時也印這個） -->
+    <div id="single-print-wrap" class="single-print-wrap">
+      <div class="envelope size-a4" id="envelope">
+        <div class="stamp-area">貼郵<br>票處</div>
+        <div class="recv-postcode-area"><div class="postcode-label">收件人3+2碼郵遞區號</div><div class="postcode-box" id="recv-postcode-display"></div></div>
+        <div class="send-postcode-area"><div class="postcode-label">寄件人3+2碼郵遞區號</div><div class="postcode-box" id="send-postcode-display"></div></div>
+        <div class="env-body">
+          <div class="col-sender">
+            <div class="sender-lane" style="width:37px;"><div class="sender-spacer"></div><span class="vt vt-name" id="env-send-name"></span></div>
+            <div class="sender-lane" style="width:41px;"><div class="sender-spacer"></div><span class="vt vt-sm" id="env-send-addr"></span></div>
+          </div>
+          <div class="divider-v"></div>
+          <div class="col-recv-name">
+            <span class="vt vt-lg" id="env-recv-name"></span>
+            <span class="vt vt-md" id="env-recv-title"></span>
+            <span class="vt vt-md" id="env-recv-suffix"></span>
+          </div>
+          <div class="divider-v"></div>
+          <div class="col-recv-addr"><span class="vt vt-sm" id="env-recv-addr"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 批次列印 ===== -->
+  <div id="page-batch" class="page">
+
+    <div class="form-card no-print">
+      <div class="section-title" style="border:none;padding:0;margin-bottom:12px;">匯入 Excel 檔案</div>
+      <div class="upload-area" onclick="document.getElementById('excel-upload').click()">
+        <input type="file" id="excel-upload" accept=".xlsx,.xls" onchange="loadExcel(this)">
+        📂 點擊上傳「信封清單範本.xlsx」<br>
+        <span style="font-size:11px;color:#aaa;margin-top:4px;display:block;">欄位：收件郵遞區號 / 收件姓名 / 收件地址 / 稱謂 / 啟收 / 寄件郵遞區號 / 寄件姓名 / 寄件地址</span>
+      </div>
+      <div style="text-align:center;color:#aaa;font-size:12px;margin-bottom:10px;">— 或手動新增 —</div>
+      <div class="form-grid">
+        <div class="section-title" style="color:#1a5276;">收件人</div>
+        <div class="form-group"><label>郵遞區號</label><input id="b-recv-zip" type="text" maxlength="5" placeholder="例：10603"></div>
+        <div class="form-group"><label>收件人姓名</label><input id="b-recv-name" type="text" placeholder="例：林○○"></div>
+        <div class="form-group full"><label>收件地址</label><input id="b-recv-addr" type="text" placeholder="例：台北市大安區金山南路2段55號"></div>
+        <div class="form-group"><label>稱謂</label><input id="b-recv-title" type="text" placeholder="例：小姐"></div>
+        <div class="form-group"><label>啟/收</label><input id="b-recv-suffix" type="text" value="收"></div>
+        <div class="section-title" style="color:#1e8449;margin-top:4px;">寄件人</div>
+        <div class="form-group"><label>郵遞區號</label><input id="b-send-zip" type="text" maxlength="5" value=""></div>
+        <div class="form-group"><label>寄件人姓名</label><input id="b-send-name" type="text" value="頂烽企業股份有限公司"></div>
+        <div class="form-group full"><label>寄件地址</label><input id="b-send-addr" type="text" value="新竹市香山區中華路6段67巷3弄1號"></div>
+      </div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-primary" onclick="addBatchItem()">＋ 新增到清單</button>
+        <button class="btn" onclick="clearBatch()" style="color:#c00;">清空清單</button>
+      </div>
+    </div>
+
+    <div class="form-card no-print">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:600;color:#555;">收件人清單 <span id="batch-count">（0 筆）</span></span>
+      </div>
+      <div class="batch-list" id="batch-list"></div>
+      <div class="btn-row" style="margin-top:14px;">
+        <div class="size-toggle">
+          <button class="size-btn active" onclick="setBatchSize('a4',this)">A4 直式</button>
+          <button class="size-btn" onclick="setBatchSize('medium',this)">中式信封</button>
+        </div>
+        <button class="btn btn-green" onclick="printBatch()">🖨️ 批次列印全部</button>
+      </div>
+    </div>
+
+    <!-- 批次預覽（上下切換，僅顯示不列印） -->
+    <div class="preview-box no-print" id="preview-box">
+      <div class="preview-empty" id="preview-empty">尚無資料，請先新增或匯入收件人</div>
+      <div id="preview-content" style="display:none;">
+        <div class="preview-nav-row">
+          <button id="preview-prev" onclick="previewPrev()" disabled>← 上一筆</button>
+          <span class="preview-nav-info" id="preview-nav-info">0 / 0</span>
+          <button id="preview-next" onclick="previewNext()" disabled>下一筆 →</button>
+        </div>
+        <div id="preview-wrap"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var currentSize = 'a4', batchSize = 'a4', batchItems = [], previewIndex = 0;
+
+function switchPage(page, btn) {
+  document.querySelectorAll('.page').forEach(function(e){e.classList.remove('active');});
+  document.querySelectorAll('.nav-tab').forEach(function(e){e.classList.remove('active');});
+  document.getElementById('page-'+page).classList.add('active');
+  btn.classList.add('active');
+}
+
+function setSize(size, btn) {
+  currentSize = size;
+  document.getElementById('envelope').className = 'envelope size-'+size;
+  document.querySelectorAll('#page-single .size-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+}
+
+function setBatchSize(size, btn) {
+  batchSize = size;
+  document.querySelectorAll('#page-batch .size-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderPreview();
+}
+
+function pc(zip) {
+  var d=(zip||'').replace(/\D/g,'').padEnd(5,' ').slice(0,5), h='';
+  for(var i=0;i<3;i++) h+='<div class="digit">'+d[i].trim()+'</div>';
+  h+='<span class="postcode-sep">-</span>';
+  for(var i=3;i<5;i++) h+='<div class="digit">'+d[i].trim()+'</div>';
+  return h;
+}
+
+function buildEnvHTML(sizeClass, d) {
+  return '<div class="envelope '+sizeClass+'">'
+    +'<div class="stamp-area">貼郵<br>票處</div>'
+    +'<div class="recv-postcode-area"><div class="postcode-label">收件人3+2碼郵遞區號</div><div class="postcode-box">'+pc(d.rzip)+'</div></div>'
+    +'<div class="send-postcode-area"><div class="postcode-label">寄件人3+2碼郵遞區號</div><div class="postcode-box">'+pc(d.szip)+'</div></div>'
+    +'<div class="env-body">'
+    +'<div class="col-sender">'
+    +'<div class="sender-lane" style="width:37px;"><div class="sender-spacer"></div><span class="vt vt-name">'+d.sname+'</span></div>'
+    +'<div class="sender-lane" style="width:41px;"><div class="sender-spacer"></div><span class="vt vt-sm">'+d.saddr+'</span></div>'
+    +'</div><div class="divider-v"></div>'
+    +'<div class="col-recv-name">'
+    +'<span class="vt vt-lg">'+d.rname+'</span>'
+    +(d.rtitle?'<span class="vt vt-md">'+d.rtitle+'</span>':'')
+    +(d.rsuffix?'<span class="vt vt-md">'+d.rsuffix+'</span>':'')
+    +'</div><div class="divider-v"></div>'
+    +'<div class="col-recv-addr"><span class="vt vt-sm">'+d.raddr+'</span></div>'
+    +'</div></div>';
+}
+
+function updateEnvelope() {
+  document.getElementById('recv-postcode-display').innerHTML = pc(document.getElementById('recv-zip').value);
+  document.getElementById('send-postcode-display').innerHTML = pc(document.getElementById('send-zip').value);
+  document.getElementById('env-recv-name').textContent = document.getElementById('recv-name').value;
+  document.getElementById('env-recv-addr').textContent = document.getElementById('recv-addr').value;
+  document.getElementById('env-recv-title').textContent = document.getElementById('recv-title').value;
+  document.getElementById('env-recv-suffix').textContent = document.getElementById('recv-suffix').value;
+  document.getElementById('env-send-addr').textContent = document.getElementById('send-addr').value;
+  document.getElementById('env-send-name').textContent = document.getElementById('send-name').value;
+}
+
+function printSingle() {
+  var ps = document.getElementById('pps') || document.createElement('style');
+  ps.id='pps'; document.head.appendChild(ps);
+  ps.textContent = '@media print{@page{size:A4 portrait;margin:0;}'
+    +(currentSize==='medium'?'#single-print-wrap{display:flex;align-items:center;justify-content:center;width:210mm;height:297mm;}':'')
+    +'}';
+  window.print();
+}
+
+function addBatchItem() {
+  var item = {
+    rzip:document.getElementById('b-recv-zip').value,
+    rname:document.getElementById('b-recv-name').value,
+    raddr:document.getElementById('b-recv-addr').value,
+    rtitle:document.getElementById('b-recv-title').value,
+    rsuffix:document.getElementById('b-recv-suffix').value,
+    szip:document.getElementById('b-send-zip').value,
+    sname:document.getElementById('b-send-name').value,
+    saddr:document.getElementById('b-send-addr').value,
+  };
+  if(!item.rname||!item.raddr){alert('請填寫收件人姓名和地址');return;}
+  batchItems.push(item);
+  renderBatchList();
+  document.getElementById('b-recv-zip').value='';
+  document.getElementById('b-recv-name').value='';
+  document.getElementById('b-recv-addr').value='';
+  document.getElementById('b-recv-title').value='';
+  document.getElementById('b-recv-suffix').value='收';
+}
+
+function loadExcel(input) {
+  var file=input.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var wb=XLSX.read(e.target.result,{type:'binary'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    var added=0;
+    for(var i=1;i<rows.length;i++){
+      var r=rows[i];
+      var rname=String(r[1]||'').trim(), raddr=String(r[2]||'').trim();
+      if(!rname&&!raddr) continue;
+      batchItems.push({rzip:String(r[0]||'').trim(),rname:rname,raddr:raddr,rtitle:String(r[3]||'').trim(),rsuffix:String(r[4]||'').trim(),szip:String(r[5]||'').trim(),sname:String(r[6]||'').trim(),saddr:String(r[7]||'').trim()});
+      added++;
+    }
+    previewIndex=0;
+    renderBatchList();
+    alert('成功匯入 '+added+' 筆資料！');
+    input.value='';
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderBatchList() {
+  var list=document.getElementById('batch-list');
+  list.innerHTML='';
+  batchItems.forEach(function(item,i){
+    var div=document.createElement('div');
+    div.className='batch-item';
+    div.innerHTML='<div class="batch-item-info">'
+      +'<div class="batch-item-recv">'+(item.rzip?'['+item.rzip+'] ':'')+item.rname+(item.rtitle?' '+item.rtitle:'')+(item.rsuffix?' '+item.rsuffix:'')+'</div>'
+      +'<div class="batch-item-addr">收：'+item.raddr+'</div>'
+      +'<div class="batch-item-send">寄：'+(item.sname||'-')+' '+item.saddr+'</div>'
+      +'</div>'
+      +'<div class="batch-item-btns">'
+      +'<button class="batch-delete" style="color:#1a5276;font-size:12px;border:1px solid #ccc;border-radius:5px;background:white;padding:2px 8px;" onclick="previewAt('+i+')">預覽</button>'
+      +'<button class="batch-delete" onclick="removeBatchItem('+i+')">✕</button>'
+      +'</div>';
+    list.appendChild(div);
+  });
+  document.getElementById('batch-count').textContent='（'+batchItems.length+' 筆）';
+  if(previewIndex>=batchItems.length) previewIndex=Math.max(0,batchItems.length-1);
+  renderPreview();
+}
+
+function previewAt(i) {
+  previewIndex=i;
+  renderPreview();
+  document.getElementById('preview-box').scrollIntoView({behavior:'smooth'});
+}
+
+function renderPreview() {
+  var empty=document.getElementById('preview-empty');
+  var content=document.getElementById('preview-content');
+  var wrap=document.getElementById('preview-wrap');
+  var info=document.getElementById('preview-nav-info');
+  var btnP=document.getElementById('preview-prev');
+  var btnN=document.getElementById('preview-next');
+  if(!batchItems.length){
+    empty.style.display=''; content.style.display='none'; return;
+  }
+  empty.style.display='none'; content.style.display='flex'; content.style.flexDirection='column'; content.style.alignItems='center'; content.style.gap='14px';
+  wrap.innerHTML=buildEnvHTML('size-'+batchSize, batchItems[previewIndex]);
+  info.textContent=(previewIndex+1)+' / '+batchItems.length;
+  btnP.disabled=previewIndex===0;
+  btnN.disabled=previewIndex===batchItems.length-1;
+}
+
+function previewPrev(){if(previewIndex>0){previewIndex--;renderPreview();}}
+function previewNext(){if(previewIndex<batchItems.length-1){previewIndex++;renderPreview();}}
+function removeBatchItem(i){batchItems.splice(i,1);renderBatchList();}
+function clearBatch(){if(batchItems.length&&!confirm('確定清空所有清單？'))return;batchItems=[];previewIndex=0;renderBatchList();}
+
+function printBatch(){
+  if(!batchItems.length){alert('請先新增收件人');return;}
+  var sc='size-'+batchSize, html='';
+  batchItems.forEach(function(d){
+    html+='<div class="print-page" style="page-break-after:always;display:flex;align-items:center;justify-content:center;width:210mm;height:297mm;">'+buildEnvHTML(sc,d)+'</div>';
+  });
+  var win=window.open('','_blank','width=900,height=700');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>');
+  win.document.write(document.querySelector('style').textContent);
+  win.document.write('*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}');
+  win.document.write('@media print{@page{size:A4 portrait;margin:0;}body{margin:0;padding:0;}.print-page:last-child{page-break-after:avoid;}}');
+  win.document.write('</style></head><body>'+html+'</body></html>');
+  win.document.close();
+  win.focus();
+  setTimeout(function(){win.print();win.close();},600);
+}
+
+document.querySelectorAll('#page-single input').forEach(function(el){
+  el.addEventListener('input',updateEnvelope);
+});
+updateEnvelope();
+</script>
+</body>
+</html>
