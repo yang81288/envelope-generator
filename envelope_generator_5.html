@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台灣直式信封產生器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'PingFang TC', 'Microsoft JhengHei', 'Microsoft YaHei', 'Noto Sans CJK TC', 'Noto Sans TC', 'Source Han Sans TC', '黑體', 'SimHei', sans-serif; background: #f5f4f0; min-height: 100vh; padding: 2rem 1rem; color: #222; }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 1.5rem; color: #333; letter-spacing: 1px; }
+
+  .container { max-width: 720px; margin: 0 auto; }
+
+  .form-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 12px; color: #666; }
+  .form-group input {
+    font-size: 13px; padding: 7px 10px;
+    border-radius: 8px; border: 1px solid #ccc;
+    background: #fafafa; color: #222; width: 100%;
+    font-family: inherit;
+  }
+  .form-group input:focus { outline: none; border-color: #888; background: white; }
+  .section-title {
+    font-size: 12px; font-weight: 600; color: #555;
+    margin-bottom: 8px; padding-bottom: 6px;
+    border-bottom: 1px solid #eee; grid-column: 1/-1;
+  }
+  .full { grid-column: 1/-1; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap; }
+  .btn {
+    padding: 9px 22px; border-radius: 8px;
+    border: 1px solid #ccc; background: white;
+    color: #333; cursor: pointer; font-size: 13px;
+    font-family: inherit;
+  }
+  .btn:hover { background: #f0f0f0; }
+  .btn-primary { background: #222; color: white; border-color: transparent; }
+  .btn-primary:hover { background: #444; }
+
+  .envelope-container { display: flex; justify-content: center; }
+
+  /* 信封本體 (直式 A4 比例縮小) */
+  .envelope {
+    width: 320px;
+    height: 453px;
+    border: 1.5px solid #444;
+    background: white;
+    position: relative;
+    color: #111;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  }
+
+  .stamp-area {
+    position: absolute;
+    top: 13px; left: 13px;
+    width: 54px; height: 66px;
+    border: 1.5px dashed #999;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: #999; text-align: center; line-height: 1.5;
+  }
+
+  .recv-postcode-area {
+    position: absolute;
+    top: 10px; right: 10px;
+    display: flex; flex-direction: column;
+    align-items: flex-end; gap: 3px;
+  }
+  .send-postcode-area {
+    position: absolute;
+    bottom: 10px; left: 10px;
+    display: flex; flex-direction: column;
+    align-items: flex-start; gap: 3px;
+  }
+  .postcode-label { font-size: 8px; color: #c00; }
+  .postcode-box { display: flex; gap: 2px; align-items: center; }
+  .digit {
+    width: 16px; height: 20px; border: 1px solid #c00;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #c00;
+  }
+  .postcode-sep { font-size: 12px; color: #c00; font-weight: 700; margin: 0 1px; }
+
+  /* 主體三欄 */
+  .env-body {
+    position: absolute;
+    top: 58px; left: 8px; right: 8px; bottom: 58px;
+    display: flex; flex-direction: row;
+  }
+
+  /* 左欄：寄件人（姓名最左、地址在右，底部對齊） */
+  .col-sender {
+    width: 82px;
+    display: flex; flex-direction: row;
+    align-items: flex-end;
+    padding-bottom: 4px;
+  }
+  .sender-lane {
+    display: flex; flex-direction: column;
+    align-items: center; height: 100%;
+  }
+  .sender-spacer { flex: 1; }
+
+  /* 中欄：收件人姓名 */
+  .col-recv-name {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px;
+  }
+
+  /* 右欄：收件地址，垂直置中 */
+  .col-recv-addr {
+    width: 40px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+
+  .divider-v {
+    width: 0.5px; background: #ddd;
+    margin: 0 2px; align-self: stretch;
+  }
+
+  /* 直式文字 */
+  .vt { writing-mode: vertical-rl; text-orientation: mixed; color: #111; }
+  .vt-sm { font-size: 12px; line-height: 1.6; letter-spacing: 1px; }
+  .vt-name { font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+  .vt-lg { font-size: 21px; font-weight: 800; letter-spacing: 3px; }
+  .vt-md { font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+
+  /* 列印 */
+  @media print {
+    @page { margin: 0; size: A4 portrait; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: white; padding: 0; margin: 0; }
+    .form-card, .btn-row, h1 { display: none !important; }
+    .container { max-width: 100%; padding: 0; margin: 0; }
+    .envelope-container { margin: 0; padding: 0; justify-content: flex-start; }
+    .envelope {
+      width: 210mm;
+      height: 297mm;
+      box-shadow: none;
+      border: none;
+      background: white !important;
+      overflow: hidden;
+    }
+    .stamp-area { width: 34mm; height: 42mm; font-size: 7mm; border-color: #999 !important; }
+    .digit { width: 10mm; height: 13mm; font-size: 8mm; border-color: #c00 !important; color: #c00 !important; }
+    .postcode-label { font-size: 5mm; color: #c00 !important; }
+    .postcode-sep { color: #c00 !important; font-size: 8mm; }
+    .env-body { top: 38mm; left: 8mm; right: 5mm; bottom: 38mm; }
+    .col-sender { width: 52mm; padding-left: 8mm; }
+    .col-recv-addr { width: 25mm; }
+    .vt-sm { font-size: 8mm; color: #111 !important; }
+    .vt-name { font-size: 9mm; color: #111 !important; }
+    .vt-lg { font-size: 14mm; color: #111 !important; }
+    .vt-md { font-size: 10mm; color: #111 !important; }
+    .vt { color: #111 !important; }
+    .recv-postcode-area { top: 6mm; right: 6mm; }
+    .send-postcode-area { bottom: 6mm; left: 6mm; }
+    .divider-v { background: #ccc !important; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📮 台灣直式信封產生器</h1>
+
+  <div class="form-card">
+    <div class="form-grid">
+      <div class="section-title">收件人資訊</div>
+      <div class="form-group">
+        <label>郵遞區號（5碼）</label>
+        <input id="recv-zip" type="text" maxlength="5" value="30095" placeholder="例：10603">
+      </div>
+      <div class="form-group">
+        <label>收件人姓名</label>
+        <input id="recv-name" type="text" value="頂烽企業股份有限公司" placeholder="例：林○○">
+      </div>
+      <div class="form-group full">
+        <label>收件地址</label>
+        <input id="recv-addr" type="text" value="新竹市香山區中華路6段67巷3弄1號">
+      </div>
+      <div class="form-group">
+        <label>稱謂</label>
+        <input id="recv-title" type="text" value="" placeholder="例：小姐、先生">
+      </div>
+      <div class="form-group">
+        <label>啟/收/鈞啟</label>
+        <input id="recv-suffix" type="text" value="收" placeholder="例：啟、收">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-grid">
+      <div class="section-title">寄件人資訊</div>
+      <div class="form-group">
+        <label>郵遞區號（5碼）</label>
+        <input id="send-zip" type="text" maxlength="5" value="30095" placeholder="例：40867">
+      </div>
+      <div class="form-group">
+        <label>寄件人姓名</label>
+        <input id="send-name" type="text" value="頂烽企業股份有限公司" placeholder="例：陳○緘">
+      </div>
+      <div class="form-group full">
+        <label>寄件地址</label>
+        <input id="send-addr" type="text" value="新竹市香山區中華路6段67巷3弄1號">
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="updateEnvelope()">更新信封</button>
+    <button class="btn" onclick="window.print()">🖨️ 列印信封</button>
+  </div>
+
+  <br>
+
+  <div class="envelope-container">
+    <div class="envelope" id="envelope">
+
+      <!-- 貼郵票處 -->
+      <div class="stamp-area">貼郵<br>票處</div>
+
+      <!-- 收件人郵遞區號 右上 -->
+      <div class="recv-postcode-area">
+        <div class="postcode-label">收件人3+2碼郵遞區號</div>
+        <div class="postcode-box" id="recv-postcode-display"></div>
+      </div>
+
+      <!-- 寄件人郵遞區號 左下 -->
+      <div class="send-postcode-area">
+        <div class="postcode-label">寄件人3+2碼郵遞區號</div>
+        <div class="postcode-box" id="send-postcode-display"></div>
+      </div>
+
+      <!-- 主體三欄 -->
+      <div class="env-body">
+
+        <!-- 左欄：寄件人（姓名在左、地址在右，底部最後一字對齊） -->
+        <div class="col-sender">
+          <div class="sender-lane" style="width:37px;">
+            <div class="sender-spacer"></div>
+            <span class="vt vt-name" id="env-send-name">陳○緘</span>
+          </div>
+          <div class="sender-lane" style="width:41px;">
+            <div class="sender-spacer"></div>
+            <span class="vt vt-sm" id="env-send-addr">台中市南屯區向上路2段199號</span>
+          </div>
+        </div>
+
+        <div class="divider-v"></div>
+
+        <!-- 中欄：收件人姓名，垂直置中 -->
+        <div class="col-recv-name">
+          <span class="vt vt-lg" id="env-recv-name">林○○</span>
+          <span class="vt vt-md" id="env-recv-title">小姐</span>
+          <span class="vt vt-md" id="env-recv-suffix">啟</span>
+        </div>
+
+        <div class="divider-v"></div>
+
+        <!-- 右欄：收件地址，垂直置中 -->
+        <div class="col-recv-addr">
+          <span class="vt vt-sm" id="env-recv-addr">台北市大安區金山南路2段55號</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function renderPostcode(id, zip) {
+  const el = document.getElementById(id);
+  const d = (zip || '').replace(/\D/g, '').padEnd(5, ' ').slice(0, 5);
+  let h = '';
+  for (let c of d.slice(0, 3)) h += `<div class="digit">${c.trim()}</div>`;
+  h += '<span class="postcode-sep">-</span>';
+  for (let c of d.slice(3, 5)) h += `<div class="digit">${c.trim()}</div>`;
+  el.innerHTML = h;
+}
+
+function updateEnvelope() {
+  renderPostcode('recv-postcode-display', document.getElementById('recv-zip').value);
+  renderPostcode('send-postcode-display', document.getElementById('send-zip').value);
+  document.getElementById('env-recv-name').textContent = document.getElementById('recv-name').value;
+  document.getElementById('env-recv-addr').textContent = document.getElementById('recv-addr').value;
+  document.getElementById('env-recv-title').textContent = document.getElementById('recv-title').value;
+  document.getElementById('env-recv-suffix').textContent = document.getElementById('recv-suffix').value;
+  document.getElementById('env-send-addr').textContent = document.getElementById('send-addr').value;
+  document.getElementById('env-send-name').textContent = document.getElementById('send-name').value;
+}
+
+// 即時更新
+document.querySelectorAll('input').forEach(el => {
+  el.addEventListener('input', updateEnvelope);
+});
+
+updateEnvelope();
+</script>
+</body>
+</html>
